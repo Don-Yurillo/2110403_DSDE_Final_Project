@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
@@ -64,7 +65,7 @@ predicted_data = loadJsonData(r'src\data\db-data\predicted_data.json')
 
 
 # This will change to be topic when data is ready
-st.title("Gender Distribution by Affiliation")
+st.title("Gender Distribution by Topic")
 
 df = pd.DataFrame(predicted_data)
 allYearGenderCount = df.groupby('affiliation')['predict_gender'].value_counts()
@@ -80,28 +81,42 @@ df['predict_gender'] = df['predict_gender'].replace(['m', 'f'],['Male', 'Female'
 # st.write(df.groupby('affiliation')['gender'].value_counts())
 
 if not df.empty: # Check for empty DataFrame after cleaning
-    affiliations = df['affiliation'].unique()
+    subject_df = pd.DataFrame(df, columns=["subject_code"])
+    subject_df['subject_code'] = subject_df['subject_code'].apply(lambda x: str(x)[0:2]+str("00"))
+    # subject_df['subject_code'] = subject_df['subject_code'].apply(lambda x: subject_map[x])
+    # subject_list = subject_df['subject_code'].unique()
     # st.write(affiliations)
-    selected_affiliation_sidebar = st.sidebar.selectbox("Select Topic", affiliations)
-    selected_affiliation = df[df['affiliation'] == selected_affiliation_sidebar]
+    selected_subject_sidebar = st.sidebar.selectbox("Select Topic", subject_df['subject_code'].apply(lambda x: subject_map[x]).unique())
     
+    st.write(selected_subject_sidebar)
+    
+    selected_subject = df[subject_df['subject_code'].apply(lambda x: subject_map[x]) == selected_subject_sidebar]
+    selected_subject.loc[len(selected_subject)] = [np.nan, np.nan, np.nan, np.nan, np.nan, "All", np.nan]
+    selected_subject['year'] = selected_subject['year'].astype(str)
+    selected_subject = selected_subject.sort_values(by='year', ascending=False)
+    # st.write(selected_subject[selected_subject['name'].isna()])
     col1 , col2 = st.columns(2)
     with col1:
-        selected_year1 = st.selectbox("Select Year1", selected_affiliation['year'].unique(), index=1)
+        selected_year1 = st.selectbox("",selected_subject['year'].unique(), index=0)
     with col2:
-        selected_year2 = st.selectbox("Select Year2", selected_affiliation['year'].unique(), index=2)
+        selected_year2 = st.selectbox("",selected_subject['year'].unique(), index=1)
     
-    filtered_affiliation_df = df[df['affiliation'] == selected_affiliation_sidebar]
-    # st.write(filtered_df.groupby('affiliation')['gender'].value_counts())
-    # st.write(filtered_df['gender'].value_counts())
-    if not filtered_affiliation_df.empty: # Check if the filtered DataFrame is empty
+    filtered_subject_df = selected_subject
+    
+    if not filtered_subject_df.empty: # Check if the filtered DataFrame is empty
         fig = make_subplots(rows=1, cols=2, specs=[[{"type": "pie"}, {"type": "pie"}]], subplot_titles=[f"Gender Distribution in {selected_year1}", f"Gender Distribution in {selected_year2}"])
-
-        filtered_year_1 = filtered_affiliation_df[filtered_affiliation_df['year'] == selected_year1]
-        # st.write(filtered_year_1)
+        
+        if selected_year1 == "All":
+            filtered_year_1 = filtered_subject_df
+        else:
+            filtered_year_1 = filtered_subject_df[filtered_subject_df['year'] == selected_year1]
+        filtered_year_1 = filtered_year_1.dropna(subset=['name'])
+        # st.write(filtered_year_1[filtered_year_1['name'].isna()])
+        
         gender_counts_year1 = filtered_year_1['predict_gender'].value_counts().reset_index()
         gender_counts_year1.columns = ['gender', 'count']
-        # st.write(gender_counts_year1.head())
+        total_gender_counts_year1 = gender_counts_year1['count'].sum()
+        gender_counts_year1['percentage'] = gender_counts_year1['count'].apply(lambda x: round((x / total_gender_counts_year1) * 100, 2))
         # Pie Chart
         fig.add_trace(
             go.Pie(labels=gender_counts_year1['gender'],
@@ -111,26 +126,34 @@ if not df.empty: # Check for empty DataFrame after cleaning
             row=1, col=1
         )
        
-        filtered_year_2 = filtered_affiliation_df[filtered_affiliation_df['year'] == selected_year2]
-        # st.write(filtered_year_1)
+        if selected_year2 == "All":
+            filtered_year_2 = filtered_subject_df
+        else:
+            filtered_year_2 = filtered_subject_df[filtered_subject_df['year'] == selected_year2]
+        filtered_year_2 = filtered_year_2.dropna(subset=['name'])
+        
         gender_counts_year2 = filtered_year_2['predict_gender'].value_counts().reset_index()
         gender_counts_year2.columns = ['gender', 'count']
-        # st.write(gender_counts_year2.head())
+        total_gender_counts_year2 = gender_counts_year2['count'].sum()
+        gender_counts_year2['percentage'] = gender_counts_year2['count'].apply(lambda x: round((x / total_gender_counts_year2) * 100, 2))
         fig.add_trace(
             go.Pie(labels=gender_counts_year2['gender'], 
                    values=gender_counts_year2['count'], # Count occurrences
                    name="Gender Distribution",
-                   marker=dict(colors=px.colors.qualitative.Set2)),
+                   marker=dict(colors=px.colors.qualitative.Set1)),
             row=1, col=2
         )
-
-
-        fig.update_layout(title_text=f"Gender Distribution in {selected_affiliation_sidebar} will change to topic")
+        fig.update_layout(title_text=f"Gender Distribution in {selected_subject_sidebar}")
         st.plotly_chart(fig)
+        col1 , col2 = st.columns(2)
+        with col1:
+            st.dataframe(gender_counts_year1, width=300)
+        with col2:
+            st.dataframe(gender_counts_year2, width=300)
         # fig.update_traces(textinfo='value+label')  # Show both count and label on each slice
         # st.plotly_chart(fig)
     else:
-        st.warning("No data found for the selected affiliation.")
+        st.warning("No data found for the selected topic.")
 else:
     st.warning("The dataset is empty after cleaning.  Check the data source.")
     
