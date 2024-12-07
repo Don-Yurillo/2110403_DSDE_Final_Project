@@ -10,7 +10,37 @@ import geopandas as gpd
 import pydeck as pdk
 from shapely.geometry import Point
 import random
+import altair as alt
 
+subject_map = {
+    "1000": "Multidisciplinary",
+    "1100": "Agricultural and Biological Sciences",
+    "1200": "Arts and Humanities",
+    "1300": "Biochemistry, Genetics and Molecular Biology",
+    "1400": "Business, Management and Accounting",
+    "1500": "Chemical Engineering",
+    "1600": "Chemistry",
+    "1700": "Computer Science",
+    "1800": "Decision Sciences",
+    "1900": "Earth and Planetary Sciences",
+    "2000": "Economics, Econometrics and Finance",
+    "2100": "Energy",
+    "2200": "Engineering",
+    "2300": "Environmental Science",
+    "2400": "Immunology and Microbiology",
+    "2500": "Materials Science",
+    "2600": "Mathematics",
+    "2700": "Medicine",
+    "2800": "Neuroscience",
+    "2900": "Nursing",
+    "3000": "Pharmacology, Toxicology and Pharmaceutics",
+    "3100": "Physics and Astronomy",
+    "3200": "Psychology",
+    "3300": "Social Sciences",
+    "3400": "Veterinary",
+    "3500": "Dentistry",
+    "3600": "Health Professions"
+}
 
 def loadJsonData(filename):
     try:
@@ -131,105 +161,165 @@ if not df.empty:
     st.plotly_chart(fig)
 else:
     st.warning("The dataset is empty after cleaning.  Check the data source.")
+    
 
 
-# Streamlit app title
-st.title("Cluster Map from JSON Data")
+if not df.empty:
+    
+    chart_df = pd.DataFrame(df, columns=["subject_code", "predict_gender"])
+    chart_df['subject_code'] = chart_df['subject_code'].apply(lambda x: str(x)[0:2]+str("00"))
+    selectBox = st.selectbox("Select Topic", ['All Topics', 'Life Sciences', 'Social Sciences', 'Physical Sciences', 'Health Sciences'], index=0)
+    if selectBox == "All Topics":
+        chart_df = chart_df
+    if selectBox == "Life Sciences": 
+        chart_df = chart_df[chart_df['subject_code'].isin(["1000","1300", "2400", "2800", "3000"])]
+    if selectBox == "Social Sciences": 
+        chart_df = chart_df[chart_df['subject_code'].isin(["1200","1400","1800","2000","3200","3300","3300"])]
+    if selectBox == "Physical Sciences": 
+        chart_df = chart_df[chart_df['subject_code'].isin(["1500","1600","1700","1900","2100","2200","2300","2500","2600","3100"])]
+    if selectBox == "Health Sciences": 
+        chart_df = chart_df[chart_df['subject_code'].isin(["2700" ,"2900" , "3400", "3500", "3600"])]
+    
+    chart_df = chart_df.groupby(['subject_code', 'predict_gender']).value_counts().reset_index(name='count')
+    chart_df.columns = [selectBox, 'gender', 'count']
+    
+    total_female = chart_df[chart_df['gender'] == "Female"]['count'].sum()
+    total_male = chart_df[chart_df['gender'] == "Male"]['count'].sum()
+    total_person = chart_df['count'].sum()
+    
+    chart_df['normalized_count'] = chart_df.apply(
+        lambda row: ((row['count'] / total_female) * 100) if row['gender'] == "Female" else ((row['count'] / total_male) * 100), axis=1
+    )
+    chart_df[selectBox] = chart_df[selectBox].apply(lambda x: subject_map[x])
+    
+    checkBox = st.checkbox("Show more data", value=False)
+    col1, col2 = st.columns(2)
 
-# Upload the JSON file
-use_data = []
-random_strings = ["m", "f"]
+    if checkBox:
+        with col1:
+                st.write(chart_df)
+        with col2:
+            selected_subject = st.selectbox(
+                "Select Subject Code to view data",
+                options=chart_df[selectBox].unique() 
+            )
+            filtered_data = chart_df[chart_df[selectBox] == selected_subject][['gender', 'count']]
 
-# @st.cache_data
-# def load_data():
-#     data = pd.read_json('paper_data.cu_paper_data_pub.json')
-#     return data
-# # Load data
-# data = load_data()
-map_data = loadJsonData(r'src\data\db-data\predicted_data.json')
-map_data = pd.DataFrame(map_data)
+            # Display the filtered data
+            st.write(f"Data for Subject Code {selected_subject}:")
+            st.write(filtered_data)
+    
+    chart = alt.Chart(chart_df).mark_bar().encode(
+        x='gender',
+        y='normalized_count',
+        color='{}:N'.format(selectBox),  # Color by subject_code
+        tooltip=['gender', 'count', selectBox]  # Tooltip to show details on hover
+        
+    ).properties(
+        title='Gender Distribution Stacked by Subject Code'
+    )
+    st.altair_chart(chart, use_container_width=True)
+    
+else:
+    st.warning("The dataset is empty after cleaning.  Check the data source.")
 
-if map_data is not None:
-    st.write("Parsed Data:", map_data.head())
+# # Streamlit app title
+# st.title("Cluster Map from JSON Data")
+
+# # Upload the JSON file
+# use_data = []
+# random_strings = ["m", "f"]
+
+# # @st.cache_data
+# # def load_data():
+# #     data = pd.read_json('paper_data.cu_paper_data_pub.json')
+# #     return data
+# # # Load data
+# # data = load_data()
+# map_data = loadJsonData(r'src\data\db-data\predicted_data.json')
+# map_data = pd.DataFrame(map_data)
+
+# if map_data is not None:
+#     st.write("Parsed Data:", map_data.head())
  
-    # Convert to a DataFrame
-    df = pd.DataFrame(map_data, columns=["predict_gender", "affiliation"])
+#     # Convert to a DataFrame
+#     df = pd.DataFrame(map_data, columns=["predict_gender", "affiliation"])
 
-    # Function to get random points within country boundaries
-    def generate_random_points(country_name, num_points=1):
-        # Geocode country to get coordinates (latitude, longitude)
-        geolocator = Nominatim(user_agent="geoapi")
-        location = geolocator.geocode(country_name)
+#     # Function to get random points within country boundaries
+#     def generate_random_points(country_name, num_points=1):
+#         # Geocode country to get coordinates (latitude, longitude)
+#         geolocator = Nominatim(user_agent="geoapi")
+#         location = geolocator.geocode(country_name)
         
-        # Load world map shapefiles (from local path)
-        world = gpd.read_file(r"src\data\map-data\ne_110m_admin_0_countries.shp")  # Use your local path to the shapefile
-        # print(world.columns)
-        # st.write("Parsed Data:", world.head())
-        # Filter to get the country boundary
-        country = world[world.NAME_LONG == country_name]
+#         # Load world map shapefiles (from local path)
+#         world = gpd.read_file(r"src\data\map-data\ne_110m_admin_0_countries.shp")  # Use your local path to the shapefile
+#         # print(world.columns)
+#         # st.write("Parsed Data:", world.head())
+#         # Filter to get the country boundary
+#         country = world[world.NAME_LONG == country_name]
         
-        # If country found, generate random points within the boundary
-        if not country.empty:
-            polygon = country.geometry.iloc[0]
-            points = []
+#         # If country found, generate random points within the boundary
+#         if not country.empty:
+#             polygon = country.geometry.iloc[0]
+#             points = []
             
-            # Generate random points inside the country boundary
-            for _ in range(num_points):
-                while True:
-                    # Generate random latitude and longitude
-                    lon = random.uniform(polygon.bounds[0], polygon.bounds[2])
-                    lat = random.uniform(polygon.bounds[1], polygon.bounds[3])
-                    point = Point(lon, lat)
+#             # Generate random points inside the country boundary
+#             for _ in range(num_points):
+#                 while True:
+#                     # Generate random latitude and longitude
+#                     lon = random.uniform(polygon.bounds[0], polygon.bounds[2])
+#                     lat = random.uniform(polygon.bounds[1], polygon.bounds[3])
+#                     point = Point(lon, lat)
                     
-                    # Check if point is inside the country's boundary
-                    if polygon.contains(point):
-                        points.append((lat, lon))
-                        break
-            return points
-        else:
-            return []
+#                     # Check if point is inside the country's boundary
+#                     if polygon.contains(point):
+#                         points.append((lat, lon))
+#                         break
+#             return points
+#         else:
+#             return []
 
-    # Generate random points for each country
-    random_coords = []
-    for _, row in df.iterrows():
-        country = row['affiliation']
-        gender = row['predict_gender']
-        points = generate_random_points(country, num_points=3)  # You can generate more points
-        for lat, lon in points:
-            random_coords.append({"Gender": gender, "Country": country, "Lat": lat, "Lon": lon})
+#     # Generate random points for each country
+#     random_coords = []
+#     for _, row in df.iterrows():
+#         country = row['affiliation']
+#         gender = row['predict_gender']
+#         points = generate_random_points(country, num_points=3)  # You can generate more points
+#         for lat, lon in points:
+#             random_coords.append({"Gender": gender, "Country": country, "Lat": lat, "Lon": lon})
 
-    # Convert the random coordinates to a DataFrame
-    coords_df = pd.DataFrame(random_coords)
+#     # Convert the random coordinates to a DataFrame
+#     coords_df = pd.DataFrame(random_coords)
     
-    coords_df['Color'] = coords_df['Gender'].apply(lambda x: [255, 0, 0] if x == 'f' else [0, 0, 255])
+#     coords_df['Color'] = coords_df['Gender'].apply(lambda x: [255, 0, 0] if x == 'f' else [0, 0, 255])
     
-    # Streamlit app
-    st.title("Randomized Gender and Country Map")
+#     # Streamlit app
+#     st.title("Randomized Gender and Country Map")
 
-    # Show data table
-    st.write("### Data")
-    st.dataframe(coords_df)
+#     # Show data table
+#     st.write("### Data")
+#     st.dataframe(coords_df)
 
-    # Pydeck map with 2D view
-    st.write("### Map")
-    view_state = pdk.ViewState(
-        latitude=coords_df["Lat"].mean(),
-        longitude=coords_df["Lon"].mean(),
-        zoom=1,
-        pitch=0  # Set pitch to 0 for 2D view
-    )
+#     # Pydeck map with 2D view
+#     st.write("### Map")
+#     view_state = pdk.ViewState(
+#         latitude=coords_df["Lat"].mean(),
+#         longitude=coords_df["Lon"].mean(),
+#         zoom=1,
+#         pitch=0  # Set pitch to 0 for 2D view
+#     )
 
-    # Layer for gender visualization
-    layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=coords_df,
-        get_position=["Lon", "Lat"],
-        get_color="Color",  # Conditional color based on Gender
-        get_radius=90000,
-        opacity=0.2,
-        pickable=True,
-    )
+#     # Layer for gender visualization
+#     layer = pdk.Layer(
+#         "ScatterplotLayer",
+#         data=coords_df,
+#         get_position=["Lon", "Lat"],
+#         get_color="Color",  # Conditional color based on Gender
+#         get_radius=90000,
+#         opacity=0.2,
+#         pickable=True,
+#     )
 
-    # Render map
-    r = pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip={"text": "{Country}"})
-    st.pydeck_chart(r)
+#     # Render map
+#     r = pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip={"text": "{Country}"})
+#     st.pydeck_chart(r)
