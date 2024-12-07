@@ -5,27 +5,31 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
 
+def loadJsonData(filename):
+    try:
+        with open(filename, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+    except UnicodeDecodeError:
+        try:
+            with open(filename, 'r', encoding='latin-1') as file:
+                data = json.load(file)
+        except UnicodeDecodeError:
+            st.error("Error: Could not decode the JSON file. Please check the file encoding.")
+            st.stop()
+    except FileNotFoundError:
+        st.error("Error: JSON file not found.")
+        st.stop()
+        
+    return data
+
+# Data Loading
+behind_the_name_data = loadJsonData(r'src\data\db-data\behind_the_name_data.json')
+
 
 # This will change to be topic when data is ready
 st.title("Gender Distribution by Affiliation")
 
-try:
-    with open(r'src\data\db-data\behind_the_name_data.json', 'r', encoding='utf-8') as file:  # Try UTF-8 first
-        data = json.load(file)
-except UnicodeDecodeError:
-    try:
-        with open(r'src\data\db-data\behind_the_name_data.json', 'r', encoding='latin-1') as file: # Try Latin-1 if UTF-8 fails
-            data = json.load(file)
-    except UnicodeDecodeError:  # Handle cases where neither encoding works
-        st.error("Error: Could not decode the JSON file. Please check the file encoding.")
-        st.stop()  # Stop execution to prevent further errors
-
-except FileNotFoundError:
-    st.error("Error: JSON file not found.")
-    st.stop()
-
-
-df = pd.DataFrame(data)
+df = pd.DataFrame(behind_the_name_data)
 
 # Data Cleaning (Important!):
 df.dropna(subset=['gender', 'affiliation'], inplace=True)  # Remove rows with missing gender or affiliation
