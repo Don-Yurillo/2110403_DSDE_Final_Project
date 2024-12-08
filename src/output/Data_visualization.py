@@ -158,6 +158,39 @@ else:
     st.warning("The dataset is empty after cleaning.  Check the data source.")
     
 if not df.empty:
+    st.title("Line Graph")
+
+    chart_df = pd.DataFrame(df, columns=["year","subject_code", "predict_gender"])
+    chart_df['subject_code'] = chart_df['subject_code'].apply(lambda x: str(x)[0:2]+str("00"))
+    selectBox = st.selectbox("Select Topic", ['All Topics', 'Life Sciences', 'Social Sciences', 'Physical Sciences', 'Health Sciences'], index=0,key='line')
+    if selectBox == "All Topics":
+        chart_df = chart_df
+    if selectBox == "Life Sciences": 
+        chart_df = chart_df[chart_df['subject_code'].isin(["1000","1300", "2400", "2800", "3000"])]
+    if selectBox == "Social Sciences": 
+        chart_df = chart_df[chart_df['subject_code'].isin(["1200","1400","1800","2000","3200","3300","3300"])]
+    if selectBox == "Physical Sciences": 
+        chart_df = chart_df[chart_df['subject_code'].isin(["1500","1600","1700","1900","2100","2200","2300","2500","2600","3100"])]
+    if selectBox == "Health Sciences": 
+        chart_df = chart_df[chart_df['subject_code'].isin(["2700" ,"2900" , "3400", "3500", "3600"])]
+        
+    chart_df = chart_df.groupby(['year', 'predict_gender']).size().reset_index(name='count')
+    chart_df.columns = ['year', 'gender', 'count']
+    # print(chart_df.head())
+    
+    fig = px.line(
+        chart_df,
+        x = 'year',
+        y = 'count',
+        color='gender',
+        title="Gender Distribution Over Years"
+    )
+
+    st.plotly_chart(fig)
+else:
+    st.warning("The dataset is empty after cleaning.  Check the data source.")
+    
+if not df.empty:
     affiliations = df['affiliation'].unique()
     gender_counts = df.groupby(['affiliation', 'predict_gender']).size().unstack(fill_value=0).reset_index() #unstack converts to wide forma
 
@@ -245,6 +278,7 @@ if not df.empty:
     
 else:
     st.warning("The dataset is empty after cleaning.  Check the data source.")
+
 
 # # Streamlit app title
 # st.title("Cluster Map from JSON Data")
