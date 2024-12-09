@@ -10,6 +10,8 @@ import altair as alt
 from pymongo import MongoClient
 from plotly.subplots import make_subplots
 
+st.set_page_config(page_title="Data Visualization", page_icon=":bar_chart:", layout="wide")
+
 subject_map = {
     "1000": "Multidisciplinary",
     "1100": "Agricultural and Biological Sciences",
@@ -88,9 +90,24 @@ def loadMongoData(db_name, collection_name):
         st.stop()
 
 # PreLoader Path
-predicted_data = loadJsonData(r"E:\Works\Intro-to-Data-Science\2110403_DSDE_Final_Project\src\data\db-data\predicted_data.json")
-predicted_data = pd.DataFrame(predicted_data)
+@st.cache_data
+def load_data(filepath):
+    data = loadJsonData(filepath)
+    return pd.DataFrame(data)
+predicted_data = load_data(r"src\data\db-data\predicted_data_with_country.json")
 
+# @st.cache_data
+# def transform_subject_codes(df):
+#     df['subject_code'] = df['subject_code'].apply(lambda x: str(x)[0:2] + "00")
+#     return df
+
+@st.cache_data
+def prepare_chart_data(df):
+    df['predict_gender'] = df['predict_gender'].replace(['m', 'f'], ['Male', 'Female'])
+    df['subject_code'] = df['subject_code'].apply(lambda x: str(x)[0:2] + "00")
+    df.dropna(subset=['title'], inplace=True)
+    df.drop_duplicates(inplace=True)
+    return df
 
 def homePage():
     st.title("Data Visualization")
@@ -104,12 +121,14 @@ def homePage():
 def pieChart(df):
     st.header("Gender Distribution by Topic")
     st.subheader("Pie Chart")
-    pie_chart_df = pd.DataFrame(df, columns=['title', 'name', 'subject_code', 'year', 'predict_gender'])
-    pie_chart_df['predict_gender'] = pie_chart_df['predict_gender'].replace(['m', 'f'],['Male', 'Female'])
-    pie_chart_df['subject_code'] = pie_chart_df['subject_code'].apply(lambda x: str(x)[0:2]+str("00"))
-    pie_chart_df.dropna(subset=['title'], inplace=True)
-    # st.write(pie_chart_df.info())
-    pie_chart_df = pie_chart_df.drop_duplicates()
+    pie_chart_df = prepare_chart_data(df)
+    pie_chart_df = pd.DataFrame(pie_chart_df, columns=['title', 'name', 'subject_code', 'year', 'predict_gender'])
+    # pie_chart_df['predict_gender'] = pie_chart_df['predict_gender'].replace(['m', 'f'],['Male', 'Female'])
+    # # pie_chart_df['subject_code'] = pie_chart_df['subject_code'].apply(lambda x: str(x)[0:2]+str("00"))
+    # pie_chart_df = transform_subject_codes(pie_chart_df)
+    # pie_chart_df.dropna(subset=['title'], inplace=True)
+    # # st.write(pie_chart_df.info())
+    # pie_chart_df = pie_chart_df.drop_duplicates()
     
     pie_chart_df_expander = st.expander("Data Table", expanded=False)
     with pie_chart_df_expander:
@@ -134,26 +153,28 @@ def pieChart(df):
         pie_chart_df = pie_chart_df[pie_chart_df['subject_code'].apply(lambda x: subject_map[x]) == selected_subject_sidebar]
     
     # st.write(pie_chart_df)
-    pie_chart_df.loc[len(pie_chart_df)] = [np.nan, np.nan, np.nan, "All Years", np.nan]
-    pie_chart_df['year'] = pie_chart_df['year'].astype(str)
-    pie_chart_df = pie_chart_df.sort_values(by='year', ascending=False)
+    # pie_chart_df.loc[len(pie_chart_df)] = [np.nan, np.nan, np.nan, "All Years", np.nan]
+    # pie_chart_df['year'] = pie_chart_df['year'].astype(str)
+    # pie_chart_df = pie_chart_df.sort_values(by='year', ascending=False)
     
     # st.write(pie_chart_df[pie_chart_df['name'].isna()]) Will appear 1 because of the added row year: ALL
-    
+    list_of_years = pie_chart_df['year'].unique().tolist()
+    list_of_years.append("All Years")
+
     col1 , col2 = st.columns(2)
     with col1:
-        selectBox_year_1 = st.selectbox("",pie_chart_df['year'].unique(), index=0)
+        selectBox_year_1 = st.selectbox("",list_of_years, index=len(list_of_years) - 1, key='pie1')
     with col2:
-        selectBox_year_2 = st.selectbox("",pie_chart_df['year'].unique(), index=1)
+        selectBox_year_2 = st.selectbox("",list_of_years, index=1, key='pie2')
     
-    filtered_pie_chart_df = pie_chart_df.copy()
+    # filtered_pie_chart_df = pie_chart_df.copy()
     
-    if not filtered_pie_chart_df.empty:
+    if not pie_chart_df.empty:
         fig = make_subplots(rows=1, cols=2, specs=[[{"type": "pie"}, {"type": "pie"}]], subplot_titles=[f"Gender Distribution in {selectBox_year_1}", f"Gender Distribution in {selectBox_year_2}"])
         if selectBox_year_1 != "All Years":
-            filtered_pie_chart_df1 = filtered_pie_chart_df[filtered_pie_chart_df['year'] == selectBox_year_1]
+            filtered_pie_chart_df1 = pie_chart_df[pie_chart_df['year'] == selectBox_year_1]
         else:
-            filtered_pie_chart_df1 = filtered_pie_chart_df[filtered_pie_chart_df['year'] != "All Years"]
+            filtered_pie_chart_df1 = pie_chart_df[pie_chart_df['year'] != "All Years"]
         
         filtered_pie_chart_df1 = filtered_pie_chart_df1.dropna(subset=['name'], axis=0)
         # st.write(filtered_pie_chart_df)
@@ -161,19 +182,19 @@ def pieChart(df):
         year1_gender_count.columns = ['gender', 'count']
         total_year1 = year1_gender_count['count'].sum()
         year1_gender_count['percentage'] = year1_gender_count['count'].apply(lambda x: round((x / total_year1) * 100, 2))
-                 
+                
         fig.add_trace(
             go.Pie(labels=year1_gender_count['gender'],
-                   values=year1_gender_count['count'], # Count occurrences
-                   name="Gender Distribution",
-                   marker=dict(colors=px.colors.qualitative.Set1)),
+                values=year1_gender_count['count'], # Count occurrences
+                name="Gender Distribution",
+                marker=dict(colors=px.colors.qualitative.Set1)),
             row=1, col=1
         )
         
         if selectBox_year_2 != "All Years":
-            filtered_pie_chart_df2 = filtered_pie_chart_df[filtered_pie_chart_df['year'] == selectBox_year_2]
+            filtered_pie_chart_df2 = pie_chart_df[pie_chart_df['year'] == selectBox_year_2]
         else:
-            filtered_pie_chart_df2 = filtered_pie_chart_df[filtered_pie_chart_df['year'] != "All Years"]
+            filtered_pie_chart_df2 = pie_chart_df[pie_chart_df['year'] != "All Years"]
         
         filtered_pie_chart_df2 = filtered_pie_chart_df2.dropna(subset=['name'], axis=0)
         # st.write(filtered_pie_chart_df)
@@ -181,12 +202,12 @@ def pieChart(df):
         year2_gender_count.columns = ['gender', 'count']
         total_year2 = year2_gender_count['count'].sum()
         year2_gender_count['percentage'] = year2_gender_count['count'].apply(lambda x: round((x / total_year2) * 100, 2))
-                 
+                
         fig.add_trace(
             go.Pie(labels=year2_gender_count['gender'],
-                   values=year2_gender_count['count'], # Count occurrences
-                   name="Gender Distribution",
-                   marker=dict(colors=px.colors.qualitative.Set1)),
+                values=year2_gender_count['count'], # Count occurrences
+                name="Gender Distribution",
+                marker=dict(colors=px.colors.qualitative.Set1)),
             row=1, col=2
         )
         fig.update_layout(title_text=f"Gender Distribution in {selected_subject_sidebar}")
@@ -210,22 +231,20 @@ def pieChart(df):
 def lineChart(df):
     st.header("Gender Distribution Over Years")
     st.subheader("Line Chart")
-    # data checking part
-    # st.write(df)
-    
-    
-    # cleansing data
-    line_chart_df = pd.DataFrame(df, columns=['title', 'name', 'subject_code', 'year', 'predict_gender'])
-    line_chart_df['predict_gender'] = line_chart_df['predict_gender'].replace(['m', 'f'],['Male', 'Female'])
-    line_chart_df['subject_code'] = line_chart_df['subject_code'].apply(lambda x: str(x)[0:2]+str("00"))
-    line_chart_df.dropna(subset=['title'], inplace=True)
-    # st.write(pie_chart_df.info())
-    line_chart_df = line_chart_df.drop_duplicates()
-    
+
+    # prepare data
+    line_chart_df = prepare_chart_data(df)
+    # line_chart_df = pd.DataFrame(line_chart_df, columns=['title', 'name', 'subject_code', 'year', 'predict_gender'])
+    # line_chart_df['predict_gender'] = line_chart_df['predict_gender'].replace(['m', 'f'],['Male', 'Female'])
+    # line_chart_df = transform_subject_codes(line_chart_df)
+    # line_chart_df.dropna(subset=['title'], inplace=True)
+    # line_chart_df = line_chart_df.drop_duplicates()
+    # # line_chart_df['subject_code'] = line_chart_df['subject_code'].apply(lambda x: str(x)[0:2]+str("00"))
+    # # st.write(pie_chart_df.info())
+    # st.write(line_chart_df)
     line_chart_df = pd.DataFrame(line_chart_df, columns=['year', 'subject_code', 'predict_gender'])
     st.sidebar.header("Gender Distribution Over Years")
     selected_subject_sidebar = st.sidebar.selectbox("Select Line Chart Topic", ['All Topics', 'Life Sciences', 'Social Sciences', 'Physical Sciences', 'Health Sciences'], index=0,key='line')
-    
     
     if selected_subject_sidebar == "All Topics":
         line_chart_df = line_chart_df
@@ -242,10 +261,38 @@ def lineChart(df):
     elif selected_subject_sidebar == "Health Sciences": 
         line_chart_df = line_chart_df[line_chart_df['subject_code'].isin(["2700" ,"2900" , "3400", "3500", "3600"])]
         
-        
+    # st.write(line_chart_df)
+    group_line_chart_df = line_chart_df.groupby(['year', 'subject_code', 'predict_gender']).value_counts().reset_index(name='count')
+    group_line_chart_df.columns = ['year', selected_subject_sidebar, 'gender', 'count']
+    line_chart_expander = st.expander("Data Table", expanded=False)
+    with line_chart_expander:
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.write("Topic: {}".format(selected_subject_sidebar))
+            group_line_chart_df['subject_name'] = group_line_chart_df[selected_subject_sidebar].apply(lambda x: subject_map[x])  
+            st.write(group_line_chart_df)
+        with col2:
+            sub_col1, sub_col2 = st.columns(2)
+            with sub_col1:
+                selected_year = st.selectbox(
+                    "Select Year to view data",
+                    options=group_line_chart_df['year'].unique() 
+                )
+            with sub_col2:
+                selected_subject = st.selectbox(
+                    "Select Subject to view data",
+                    options=group_line_chart_df[selected_subject_sidebar].apply(lambda x: subject_map[x]).unique() 
+                )
+            if selected_subject == "All Topics":
+                filtered_data = group_line_chart_df[(group_line_chart_df['year'] == selected_year)]
+            else:
+                filtered_data = group_line_chart_df[(group_line_chart_df['year'] == selected_year) & (group_line_chart_df[selected_subject_sidebar].apply(lambda x: subject_map[x]) == selected_subject)]
+                
+            st.write(f"Data for Year {selected_year}:")
+            st.write(filtered_data)
+    
     line_chart_df = line_chart_df.groupby(['year', 'predict_gender']).size().reset_index(name='count')
     line_chart_df.columns = ['year', 'gender', 'count']
-    # print(chart_df.head())
     
     fig = px.line(
         line_chart_df,
@@ -263,17 +310,20 @@ def lineChart(df):
     )
 
     st.plotly_chart(fig)
-
+          
 def barChart(df):
     st.header("Gender Distribution Stacked by Subject Code")
     st.subheader("Bar Chart")
     st.sidebar.header("Gender Distribution Stacked by Subject Code")
-    bar_chart_df = pd.DataFrame(df, columns=['title', 'name', 'subject_code', 'year', 'predict_gender'])
-    bar_chart_df['predict_gender'] = bar_chart_df['predict_gender'].replace(['m', 'f'],['Male', 'Female'])
-    bar_chart_df['subject_code'] = bar_chart_df['subject_code'].apply(lambda x: str(x)[0:2]+str("00"))
-    bar_chart_df.dropna(subset=['title'], inplace=True)
-    bar_chart_df = bar_chart_df.drop_duplicates()
-    # st.write(bar_chart_df)
+    
+    bar_chart_df = prepare_chart_data(df)
+    # bar_chart_df = pd.DataFrame(bar_chart_df, columns=['title', 'name', 'subject_code', 'year', 'predict_gender'])
+    # bar_chart_df['predict_gender'] = bar_chart_df['predict_gender'].replace(['m', 'f'],['Male', 'Female'])
+    # bar_chart_df = transform_subject_codes(bar_chart_df)
+    # bar_chart_df.dropna(subset=['title'], inplace=True)
+    # bar_chart_df = bar_chart_df.drop_duplicates()
+    # # bar_chart_df['subject_code'] = bar_chart_df['subject_code'].apply(lambda x: str(x)[0:2]+str("00"))
+    # # st.write(bar_chart_df)
     bar_chart_df = pd.DataFrame(bar_chart_df, columns=["subject_code", "predict_gender"])
     
     selected_subject_sidebar = st.sidebar.selectbox("Select Bar Chart Topic", ['All Topics', 'Life Sciences', 'Social Sciences', 'Physical Sciences', 'Health Sciences'], 
@@ -319,7 +369,7 @@ def barChart(df):
                 options=bar_chart_df[selected_subject_sidebar].unique() 
             )
             filtered_data = bar_chart_df[bar_chart_df[selected_subject_sidebar] == selected_subject][['gender', 'count']]
-
+            filtered_data = pd.concat([filtered_data, pd.DataFrame([['Total', filtered_data['count'].sum()]], columns=filtered_data.columns)], ignore_index=True)
             st.write(f"Data for Subject Code {selected_subject}:")
             st.write(filtered_data)
  
@@ -336,22 +386,35 @@ def barChart(df):
     )
     st.altair_chart(chart, use_container_width=True)
     
-
+def mapVisualization(df):
+    st.header("Map Visualization")
+    st.subheader("Map")
+    
+    map_df = prepare_chart_data(df)
+    map_df = pd.DataFrame(map_df, columns=['country', 'predict_gender'])
 
 def dataVisualization():
     df = predicted_data.copy()
     # st.write(df)
-
+    if df.empty:
+        st.error("Error: Data is empty.")
+        st.stop()
+    
     st.title("Data Visualization")
     st.divider()
+    
     pieChart(df)
     st.divider()
+    
     lineChart(df)
     st.divider()
+    
     barChart(df)
-
+    st.divider()
+    
+    mapVisualization(df)
+    
 def main():
-    st.set_page_config(page_title="Data Visualization", page_icon=":bar_chart:", layout="wide")
     st.sidebar.header("Choose Page:")
     choose_page = st.sidebar.selectbox("Page", ["Home", "Data Visualization"], index=1)
     
