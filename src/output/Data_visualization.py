@@ -91,7 +91,7 @@ if not df.empty: # Check for empty DataFrame after cleaning
     st.write(selected_subject_sidebar)
     
     selected_subject = df[subject_df['subject_code'].apply(lambda x: subject_map[x]) == selected_subject_sidebar]
-    selected_subject.loc[len(selected_subject)] = [np.nan, np.nan, np.nan, np.nan, np.nan, "All", np.nan]
+    # selected_subject.loc[len(selected_subject)] = [np.nan, np.nan, np.nan, np.nan, np.nan, "All", np.nan]
     selected_subject['year'] = selected_subject['year'].astype(str)
     selected_subject = selected_subject.sort_values(by='year', ascending=False)
     # st.write(selected_subject[selected_subject['name'].isna()])
