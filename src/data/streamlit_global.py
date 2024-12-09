@@ -13,7 +13,7 @@ st.title("Cluster Map from JSON Data")
 # # Upload the JSON file
 @st.cache_data
 def load_data():
-    data = pd.read_json('src\data\db-data\predicted_data.json')
+    data = pd.read_json('db-data\predicted_data.json')
     return data
 # Load data
 df2 = load_data()
