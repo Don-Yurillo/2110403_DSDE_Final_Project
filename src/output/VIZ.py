@@ -41,7 +41,8 @@ subject_map = {
     "3500": "Dentistry",
     "3600": "Health Professions"
 }
-
+base_color_f = [255, 117, 255]  # Red for 'f'
+base_color_m = [0, 117, 255]  # Blue for 'm'
 
 def startPage():
     st.title("Data Visualization")
@@ -94,7 +95,7 @@ def loadMongoData(db_name, collection_name):
 def load_data(filepath):
     data = loadJsonData(filepath)
     return pd.DataFrame(data)
-predicted_data = load_data(r"src\data\db-data\predicted_data_with_country.json")
+predicted_data = load_data(r"src\data\db-data\predicted_data_with_country_lat_lon.json")
 
 # @st.cache_data
 # def transform_subject_codes(df):
@@ -117,6 +118,19 @@ def homePage():
     # df = pd.DataFrame(data)
 
     st.write(predicted_data)
+
+def calculate_color(f_count, m_count):
+    total = f_count + m_count
+    if total == 0:
+        return [128, 128, 128]  # Neutral gray for no data
+    f_ratio = f_count / total
+    m_ratio = m_count / total
+    blended_color = [
+        int(f_ratio * base_color_f[0] + m_ratio * base_color_m[0]),
+        int(f_ratio * base_color_f[1] + m_ratio * base_color_m[1]),
+        int(f_ratio * base_color_f[2] + m_ratio * base_color_m[2]),
+    ]
+    return blended_color
 
 def pieChart(df):
     st.header("Gender Distribution by Topic")
@@ -144,10 +158,10 @@ def pieChart(df):
     st.sidebar.header("Gender Distribution by Topic")
     
     list_of_subjects = pie_chart_df['subject_code'].apply(lambda x: subject_map[x]).unique().tolist()
-    list_of_subjects.append("All Topic")
-    selected_subject_sidebar = st.sidebar.selectbox("Select Pie Chart Topic", list_of_subjects, index=len(list_of_subjects) - 1, key='pie')
+    list_of_subjects.insert(0, "All Topics")
+    selected_subject_sidebar = st.sidebar.selectbox("Select Pie Chart Topic", list_of_subjects, index=0, key='pie')
     
-    if selected_subject_sidebar == "All Topic":
+    if selected_subject_sidebar == "All Topics":
         pie_chart_df = pie_chart_df
     else:
         pie_chart_df = pie_chart_df[pie_chart_df['subject_code'].apply(lambda x: subject_map[x]) == selected_subject_sidebar]
@@ -159,11 +173,12 @@ def pieChart(df):
     
     # st.write(pie_chart_df[pie_chart_df['name'].isna()]) Will appear 1 because of the added row year: ALL
     list_of_years = pie_chart_df['year'].unique().tolist()
-    list_of_years.append("All Years")
+    list_of_years.sort(reverse=True)
+    list_of_years.insert(0, "All Years")
 
     col1 , col2 = st.columns(2)
     with col1:
-        selectBox_year_1 = st.selectbox("",list_of_years, index=len(list_of_years) - 1, key='pie1')
+        selectBox_year_1 = st.selectbox("",list_of_years, index=0, key='pie1')
     with col2:
         selectBox_year_2 = st.selectbox("",list_of_years, index=1, key='pie2')
     
@@ -188,7 +203,7 @@ def pieChart(df):
                 values=year1_gender_count['count'], # Count occurrences
                 name="Gender Distribution",
                 marker=dict(colors=px.colors.qualitative.Set1)),
-            row=1, col=1
+                row=1, col=1
         )
         
         if selectBox_year_2 != "All Years":
@@ -388,11 +403,148 @@ def barChart(df):
     
 def mapVisualization(df):
     st.header("Map Visualization")
-    st.subheader("Map")
-    
+    st.subheader("Gender Distribution by Location")
     map_df = prepare_chart_data(df)
-    map_df = pd.DataFrame(map_df, columns=['country', 'predict_gender'])
+    map_df = pd.DataFrame(map_df, columns=['country_name', 'predict_gender', 'subject_code', 'latitude', 'longitude'])
+    
+    st.sidebar.header("Scatter Plot Map")
+    list_map_subjects = map_df['subject_code'].apply(lambda x: subject_map[x]).unique().tolist()
+    list_map_subjects.insert(0, "All Topics")
+    selected_subject_sidebar = st.sidebar.selectbox("Select Bar Chart Topic", 
+                                                    list_map_subjects, 
+                                                    index=0, 
+                                                    key='select_map_subject')
+    
+    if selected_subject_sidebar == "All Topics":
+        map_df = map_df
+    else:
+        map_df = map_df[map_df['subject_code'].apply(lambda x: subject_map[x]) == selected_subject_sidebar]
+    
+    
+    map_df = map_df.dropna(subset=['latitude', 'longitude'], axis=0)
+    # st.write(map_df.isna().sum())
+    map_df = map_df[map_df['country_name'] != "None"]
+    # st.write(map_df[map_df['country_name'] == "None"])
+    
+    # st.write(map_df)
+    group_map_df = map_df.groupby(['country_name', 'predict_gender']).value_counts().reset_index(name='count') 
+    
+    map_expander = st.expander("Data Table", expanded=False)
+    with map_expander:
+        col1, col2 = st.columns([3, 4])
+        with col1:
+            st.write(group_map_df)
+        with col2:
+            selected_country = st.selectbox(
+                "Select Country to view data",
+                options=group_map_df['country_name'].unique() 
+            )
+            filtered_data = group_map_df[group_map_df['country_name'] == selected_country]
+            filtered_data['subject_code'] = filtered_data['subject_code'].apply(lambda x: subject_map[x])
+            sub_col1, sub_col2 = st.columns([6, 1.9])
+            with sub_col1:
+                st.write(f"Data for Country {selected_country}:")
+                st.write(filtered_data)
+            with sub_col2:
+                st.write(f"Total count for {selected_country}:")
+                gender_count = filtered_data.groupby('predict_gender').agg({'count': 'sum'}).reset_index()
 
+                st.write(gender_count)
+                # total_count = filtered_data['count'].sum()
+                # gender_count = pd.concat([gender_count, pd.DataFrame(['Total', total_count], columns=['Gender', 'count'])], ignore_index=True)
+                # st.write(gender_count)
+    
+    
+    grouped = group_map_df.groupby(["country_name", "latitude", "longitude"]).agg(
+        Total=("count", "sum"),
+        Male=("count", lambda x: x[group_map_df["predict_gender"] == "Male"].sum()),
+        Female=("count", lambda x: x[group_map_df["predict_gender"] == "Female"].sum()),
+    ).reset_index()
+    grouped["color_ratio"] = (grouped["Female"] - grouped["Male"]) / grouped["Total"]
+    
+    
+    fig2 = px.scatter_mapbox(
+        grouped,
+        lat="latitude",
+        lon="longitude",
+        size="Total",  # Bubble size based on total count
+        color="color_ratio",  # Color scale based on gender ratio
+        color_continuous_scale=["red", "purple", "blue"],  # Red (more males), Purple (neutral), Blue (more females)
+        hover_name="country_name",  # Country name on hover
+        hover_data={"Total": True, "Male": True, "Female": True, "color_ratio": False},  # Detailed hover info
+        title="Interactive Gender Distribution Map",
+        labels={"color_ratio": "Gender Ratio"},
+        zoom=3,  # Initial zoom level
+        center={"lat": 15, "lon": 120},  # Center map
+        height=800,  # Map height
+        size_max=50,
+    )
+
+    # Set Mapbox style
+    fig2.update_layout(
+        mapbox_accesstoken="pk.eyJ1IjoiamVmZnN0ZXJuIiwiYSI6IlAzRFFiN0EifQ.mNWvayrLEw9wULuq0sopyA",
+        mapbox_style="carto-positron",
+        coloraxis_colorbar=dict(
+            title="Gender Balance",
+            tickvals=[-1, 0, 1],
+            ticktext=["Males", "Equal", "Females"]
+        )
+    )
+
+    st.plotly_chart(fig2)
+    
+    fig = px.scatter(
+        grouped,
+        x="longitude",
+        y="latitude",
+        size="Total",  # Node size
+        color="color_ratio",  # Node color based on ratio
+        color_continuous_scale=["red", "purple", "blue"],  # Red (more males), Purple (neutral), Blue (more females)
+        hover_name="country_name",  # Hover info
+        labels={"color_ratio": "Gender Balance"},
+        title="Gender Distribution by Location",
+    )
+
+    # Update layout
+    fig.update_layout(
+        xaxis_title="Longitude",
+        yaxis_title="Latitude",
+        coloraxis_colorbar=dict(
+            title="Gender Ratio",
+            tickvals=[-1, 0, 1],
+            ticktext=["More Males", "Equal", "More Females"]
+        )
+    )
+
+    # Show plot
+    st.plotly_chart(fig)
+        
+    heatmap_layer = pdk.Layer(
+        "HeatmapLayer",
+        data=group_map_df,
+        get_position="[longitude, latitude]",
+        get_weight="count",  # Weight based on count
+        radius_pixels=100,  # Radius of influence for each point
+        
+    )
+    # Define View
+    view_state = pdk.ViewState(
+        latitude=group_map_df["latitude"].mean(),
+        longitude=group_map_df["longitude"].mean(),
+        zoom=2,
+        pitch=0,
+    )
+    # Render Map
+    r = pdk.Deck(
+        layers=[heatmap_layer],
+        initial_view_state=view_state,
+        map_style="mapbox://styles/mapbox/light-v10"  # You can choose other styles
+    )
+    st.pydeck_chart(r)
+        
+    
+
+    
 def dataVisualization():
     df = predicted_data.copy()
     # st.write(df)
