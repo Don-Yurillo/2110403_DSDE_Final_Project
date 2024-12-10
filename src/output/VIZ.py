@@ -483,15 +483,15 @@ def mapVisualization(df):
         hover_data={"Total": True, "Male": True, "Female": True, "color_ratio": False},  # Detailed hover info
         title="Interactive Gender Distribution Map",
         labels={"color_ratio": "Gender Ratio"},
-        zoom=3,  # Initial zoom level
-        center={"lat": 13, "lon": 114},  # Center map
+        zoom=1,  # Initial zoom level
+        center={"lat": 42, "lon": 12},  # Center map
         height=800,  # Map height
         size_max=50,
     )
 
     # Set Mapbox style
     fig2.update_layout(
-        mapbox_accesstoken="pk.eyJ1IjoiamVmZnN0ZXJuIiwiYSI6IlAzRFFiN0EifQ.mNWvayrLEw9wULuq0sopyA",
+        # mapbox_accesstoken="pk.eyJ1IjoiamVmZnN0ZXJuIiwiYSI6IlAzRFFiN0EifQ.mNWvayrLEw9wULuq0sopyA",
         mapbox_style="carto-positron",
         coloraxis_colorbar=dict(
             title="Gender Balance",
